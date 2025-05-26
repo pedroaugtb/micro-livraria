@@ -1,50 +1,56 @@
-const express = require('express');
-const shipping = require('./shipping');
-const inventory = require('./inventory');
-const cors = require('cors');
+const express     = require('express');
+const path        = require('path');
+const grpc        = require('@grpc/grpc-js');
+const protoLoader = require('@grpc/proto-loader');
 
-const app = express();
-app.use(cors());
+const app  = express();
+const PORT = 3000;
 
-/**
- * Retorna a lista de produtos da loja via InventoryService
- */
-app.get('/products', (req, res, next) => {
-    inventory.SearchAllProducts(null, (err, data) => {
-        if (err) {
-            console.error(err);
-            res.status(500).send({ error: 'something failed :(' });
-        } else {
-            res.json(data.products);
-        }
-    });
+/* ---------- gRPC clients ---------- */
+function loadProto(relativePath) {
+  const def = protoLoader.loadSync(
+    path.join(__dirname, relativePath),
+    { keepCase: true, longs: String, enums: String, defaults: true, oneofs: true }
+  );
+  return grpc.loadPackageDefinition(def);
+}
+
+const inventoryClient = new (loadProto('../../proto/inventory.proto')
+  .inventory.InventoryService)(
+  'localhost:3002',
+  grpc.credentials.createInsecure()
+);
+
+const shippingClient = new (loadProto('../../proto/shipping.proto')
+  .shipping.ShippingService)(
+  'localhost:3001',
+  grpc.credentials.createInsecure()
+);
+/* ---------------------------------- */
+
+/* lista todos os produtos */
+app.get('/products', (_req, res) => {
+  inventoryClient.SearchAllProducts({}, (err, reply) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(reply);
+  });
 });
 
-/**
- * Consulta o frete de envio no ShippingService
- */
-app.get('/shipping/:cep', (req, res, next) => {
-    shipping.GetShippingRate(
-        {
-            cep: req.params.cep,
-        },
-        (err, data) => {
-            if (err) {
-                console.error(err);
-                res.status(500).send({ error: 'something failed :(' });
-            } else {
-                res.json({
-                    cep: req.params.cep,
-                    value: data.value,
-                });
-            }
-        }
-    );
+/* ---------- NOVO ENDPOINT ---------- */
+app.get('/product/:id', (req, res) => {
+  inventoryClient.SearchProductByID({ id: req.params.id }, (err, product) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(product);
+  });
+});
+/* ---------------------------------- */
+
+/* cálculo de frete */
+app.get('/shipping/:cep', (req, res) => {
+  shippingClient.GetShippingRate({ cep: req.params.cep }, (err, reply) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(reply);
+  });
 });
 
-/**
- * Inicia o router
- */
-app.listen(3000, () => {
-    console.log('Controller Service running on http://127.0.0.1:3000');
-});
+app.listen(PORT, () => console.log(`Controller listening on ${PORT}`));
