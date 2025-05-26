@@ -1,20 +1,31 @@
 syntax = "proto3";
 
-service InventoryService {
-    rpc SearchAllProducts(Empty) returns (ProductsResponse) {}
-}
+package inventory;
 
-message Empty{}
+import "google/protobuf/empty.proto";
+
+// ---------- NOVAS MENSAGENS ----------
+message Payload {
+  int32 id = 1;
+}
+// -------------------------------------
 
 message ProductResponse {
-    int32 id = 1;
-    string name = 2;
-    int32 quantity = 3;
-    float price = 4;
-    string photo = 5;
-    string author = 6;
+  int32  id       = 1;
+  string name     = 2;
+  int32  quantity = 3;
+  float  price    = 4;
+  string photo    = 5;
+  string author   = 6;
 }
 
 message ProductsResponse {
-    repeated ProductResponse products = 1;
+  repeated ProductResponse products = 1;
+}
+
+service InventoryService {
+  rpc SearchAllProducts(google.protobuf.Empty) returns (ProductsResponse) {}
+  // ---------- NOVA RPC ----------
+  rpc SearchProductByID(Payload)             returns (ProductResponse)  {}
+  // --------------------------------
 }
